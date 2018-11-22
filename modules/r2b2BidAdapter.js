@@ -28,12 +28,12 @@ export const spec = {
         _addPlacement(adUnit.params)
 
         let banner
-        if (utils.isEmpty(adUnit.mediaTypes)) {
-          const sizeObjects = adUnit.sizes.map(size => ({
+        if (utils.isEmpty(adUnit.mediaTypes) && utils.isArray(adUnit.sizes)) {
+          const format = adUnit.sizes.map(size => ({
             w: size[0],
             h: size[1]
           }))
-          banner = { format: sizeObjects }
+          banner = { format }
         }
 
         const bannerParams = utils.deepAccess(adUnit, 'mediaTypes.banner')
@@ -75,7 +75,7 @@ export const spec = {
     const tid = utils.generateUUID()
     const data = {
       id: tid,
-      source: { tid: tid },
+      source: { tid },
       tmax: 1000,
       imp: imps,
       test: getConfig('debug') ? 1 : 0
@@ -127,7 +127,7 @@ export const spec = {
     }
   },
 
-  getUserSyncs: function(syncOptions) {
+  getUserSyncs: function(syncOptions = {}) {
     if (syncOptions.iframeEnabled) {
       const placementsStr = JSON.stringify(this.placements)
       return [
