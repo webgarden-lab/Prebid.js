@@ -1,5 +1,6 @@
 import { expect } from 'chai'
 import { spec } from 'modules/r2b2BidAdapter'
+import { config } from 'src/config'
 
 const newBidRequest = () => ({
   bidder: 'r2b2',
@@ -46,16 +47,38 @@ const newBidderRequest = (extra = {}) =>
     extra
   )
 
+const newServerResponse = (extra = {}) =>
+  Object.assign(
+    {
+      body: {
+        seatbid: [
+          {
+            bid: [
+              {
+                price: 1,
+                w: 300,
+                h: 250,
+                crid: 'creativeId',
+                adm: 'ad'
+              }
+            ]
+          }
+        ]
+      }
+    },
+    extra
+  )
+
 describe('r2b2BidAdapter', () => {
   describe('isBidRequestValid', () => {
     it('should return true when required params found', () => {
-      expect(spec.isBidRequestValid(newBidRequest())).to.equal(true)
+      expect(spec.isBidRequestValid(newBidRequest())).to.be.equal(true)
     })
 
     it('should return false when required params are not passed', () => {
       let br = newBidRequest()
       delete br.params
-      expect(spec.isBidRequestValid(br)).to.equal(false)
+      expect(spec.isBidRequestValid(br)).to.be.equal(false)
     })
   })
 
@@ -63,16 +86,16 @@ describe('r2b2BidAdapter', () => {
     const bidRequests = [newBidRequest()]
     it('uses POST method', () => {
       const request = spec.buildRequests(bidRequests)
-      expect(request.method).to.equal('POST')
+      expect(request.method).to.be.equal('POST')
     })
 
     it('will return empty imp if no bidderRequest passed', () => {
       const request = spec.buildRequests(bidRequests)
-      expect(request.data.imp.length).to.equal(0)
+      expect(request.data.imp.length).to.be.equal(0)
     })
 
     it('starts with empty placements', () => {
-      expect(spec.placements.length).to.equal(0)
+      expect(spec.placements.length).to.be.equal(0)
     })
 
     it('clears placements each time', () => {
@@ -82,7 +105,7 @@ describe('r2b2BidAdapter', () => {
           bids: [newAdUnit()]
         })
       )
-      expect(spec.placements.length).to.equal(1)
+      expect(spec.placements.length).to.be.equal(1)
 
       spec.buildRequests(
         bidRequests,
@@ -90,7 +113,7 @@ describe('r2b2BidAdapter', () => {
           bids: [newAdUnit(), newAdUnit()]
         })
       )
-      expect(spec.placements.length).to.equal(2)
+      expect(spec.placements.length).to.be.equal(2)
     })
 
     it('accepts sizes if mediaTypes is empty', () => {
@@ -183,10 +206,160 @@ describe('r2b2BidAdapter', () => {
       )
       expect(request).to.have.all.keys('method', 'url', 'data', 'bids')
     })
+
+    it("will set test prop according to config.getConfig('debug') value", () => {
+      let getConfigStub = sinon.stub(config, 'getConfig').returns(true)
+
+      const bid = newAdUnit()
+      const testIsOne = spec.buildRequests(
+        bidRequests,
+        newBidderRequest({
+          bids: [bid]
+        })
+      )
+
+      expect(testIsOne.data.test).to.be.equal(1)
+      getConfigStub.restore()
+
+      const testIsZero = spec.buildRequests(
+        bidRequests,
+        newBidderRequest({
+          bids: [bid]
+        })
+      )
+      getConfigStub = sinon.stub(config, 'getConfig').returns(false)
+      expect(testIsZero.data.test).to.be.equal(0)
+      getConfigStub.restore()
+    })
   })
 
   describe('interpretResponse', () => {
-    // todo
+    it('returns empty array if error is thrown', () => {
+      // will break at serverResponse.body
+      expect(spec.interpretResponse(undefined, { bids: [] })).to.deep.equal([])
+
+      // will break at request.bids
+      expect(spec.interpretResponse(undefined, undefined)).to.deep.equal([])
+
+      // will break at responses[i].bid[0]
+      expect(
+        spec.interpretResponse(
+          {
+            body: {
+              seatbid: [
+                // no bid object
+              ]
+            }
+          },
+          { bids: [] }
+        )
+      ).to.deep.equal([])
+    })
+
+    it('returns empty array if bids or responses are not an array', () => {
+      expect(
+        spec.interpretResponse(
+          {
+            body: { seatbid: [] }
+          },
+          { bids: undefined }
+        )
+      ).to.deep.equal([])
+
+      expect(
+        spec.interpretResponse(
+          {
+            body: { seatbid: undefined }
+          },
+          { bids: [] }
+        )
+      ).to.deep.equal([])
+
+      expect(
+        spec.interpretResponse(
+          {
+            body: { seatbid: undefined }
+          },
+          { bids: undefined }
+        )
+      ).to.deep.equal([])
+    })
+
+    it('returns empty array if bid or response is not an object', () => {
+      expect(
+        spec.interpretResponse(
+          {
+            body: { seatbid: [{ bid: [undefined] }] }
+          },
+          { bids: [{}] }
+        )
+      ).to.deep.equal([])
+
+      expect(
+        spec.interpretResponse(
+          {
+            body: { seatbid: [{ bid: [{}] }] }
+          },
+          { bids: [undefined] }
+        )
+      ).to.deep.equal([])
+    })
+
+    it('returns array of bidObjects with correct shape', () => {
+      const first = spec.interpretResponse(newServerResponse(), {
+        bids: [{ bidId: 'bidId', transactionId: 'trId' }]
+      })[0]
+      expect(first).to.deep.equal({
+        requestId: 'bidId',
+        cpm: 1,
+        width: 300,
+        height: 250,
+        creativeId: 'creativeId',
+        currency: 'EUR',
+        netRevenue: true,
+        ttl: 360,
+        ad: 'ad',
+        bidderCode: 'r2b2',
+        transactionId: 'trId',
+        mediaType: 'banner'
+      })
+    })
+
+    it('will always take first bid returned', () => {
+      const response = newServerResponse()
+      response.body.seatbid.concat({
+        price: 2,
+        w: 500,
+        h: 600,
+        crid: 'crid',
+        adm: 'adm'
+      })
+      const expected = spec.interpretResponse(response, {
+        bids: [
+          { bidId: 'bidId', transactionId: 'trId' },
+          {
+            bidId: 'bidId2',
+            transactionId: 'trId2'
+          }
+        ]
+      })
+      expect(expected).to.deep.equal([
+        {
+          requestId: 'bidId',
+          cpm: 1,
+          width: 300,
+          height: 250,
+          creativeId: 'creativeId',
+          currency: 'EUR',
+          netRevenue: true,
+          ttl: 360,
+          ad: 'ad',
+          bidderCode: 'r2b2',
+          transactionId: 'trId',
+          mediaType: 'banner'
+        }
+      ])
+    })
   })
 
   describe('getUserSyncs', () => {

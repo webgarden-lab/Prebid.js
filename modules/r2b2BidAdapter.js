@@ -3,11 +3,12 @@ import { BANNER, VIDEO } from 'src/mediaTypes'
 import * as utils from 'src/utils'
 import { config } from 'src/config'
 
-const getConfig = config.getConfig
 const getParams = ({ d, g, p, m }) => ({ d, g, p, m })
 
+const BIDDER_CODE = 'r2b2'
+const LOG_PREFIX = 'r2b2Adapter::'
 export const spec = {
-  code: 'r2b2',
+  code: BIDDER_CODE,
   aliases: [],
   supportedMediaTypes: [BANNER, VIDEO],
   placements: [],
@@ -18,14 +19,11 @@ export const spec = {
 
   buildRequests: function(bidRequests, bidderRequest) {
     this.placements.splice(0)
-    const _addPlacement = params => {
-      this.placements.push(getParams(params))
-    }
 
     let imps = []
     if (bidderRequest && utils.isArray(bidderRequest.bids)) {
       imps = bidderRequest.bids.map(adUnit => {
-        _addPlacement(adUnit.params)
+        this.placements.push(getParams(adUnit.params))
 
         let banner
         if (utils.isEmpty(adUnit.mediaTypes) && utils.isArray(adUnit.sizes)) {
@@ -78,7 +76,7 @@ export const spec = {
       source: { tid },
       tmax: 1000,
       imp: imps,
-      test: getConfig('debug') ? 1 : 0
+      test: config.getConfig('debug') ? 1 : 0
     }
 
     return {
@@ -91,17 +89,16 @@ export const spec = {
 
   interpretResponse: function(serverResponse, request) {
     try {
-      let bidObject, bid, response, type
-      let bidRespones = []
-      let bids = request.bids
-      let responses = serverResponse.body.seatbid
-      if (responses) {
+      const bidResponses = []
+      const bids = request.bids
+      const responses = serverResponse.body.seatbid
+      if (utils.isArray(responses) && utils.isArray(bids)) {
         for (let i = 0; i < responses.length; i++) {
-          response = responses[i].bid[0]
-          bid = bids[i]
-          type = 'banner'
-          if (response && bid) {
-            bidObject = {
+          const response = responses[i].bid[0]
+          const bid = bids[i]
+          const mediaType = BANNER
+          if (utils.isPlainObject(response) && utils.isPlainObject(bid)) {
+            const bidObject = {
               requestId: bid.bidId,
               cpm: response.price,
               width: response.w,
@@ -111,32 +108,38 @@ export const spec = {
               netRevenue: true,
               ttl: 360,
               ad: response.adm,
-              bidderCode: 'r2b2',
+              bidderCode: BIDDER_CODE,
               transactionId: bid.transactionId,
-              mediaType: type
+              mediaType
             }
 
-            bidRespones.push(bidObject)
+            bidResponses.push(bidObject)
           }
         }
       }
 
-      return bidRespones
+      return bidResponses
     } catch (e) {
+      utils.logError(LOG_PREFIX + 'interpretResponse failed', e)
       return []
     }
   },
 
   getUserSyncs: function(syncOptions = {}) {
     if (syncOptions.iframeEnabled) {
-      const placementsStr = JSON.stringify(this.placements)
-      return [
+      const placementsArg = btoa(JSON.stringify(this.placements))
+      const syncs = [
         {
           type: 'iframe',
-          url: '//hb.trackad.cz/cookieSync?p=' + btoa(placementsStr)
+          url: '//hb.trackad.cz/cookieSync?p=' + placementsArg
         }
       ]
+      utils.logInfo(LOG_PREFIX + 'getUserSyncs', syncs)
+      return syncs
     }
+    utils.logInfo(
+      LOG_PREFIX + 'getUserSyncs - syncOptions.iframeEnabled is not truthy'
+    )
     return []
   }
 }
