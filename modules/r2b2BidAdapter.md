@@ -14,7 +14,7 @@ R2B2 bid adapter supports only Banner at present
 
 # Sample Ad Unit: For Publishers
 
-```
+```js
 var adUnits = [
 {
     code: 'r2b2-provided-code-123456',
