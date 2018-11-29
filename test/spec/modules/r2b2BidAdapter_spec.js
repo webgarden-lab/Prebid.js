@@ -206,31 +206,6 @@ describe('r2b2BidAdapter', () => {
       )
       expect(request).to.have.all.keys('method', 'url', 'data', 'bids')
     })
-
-    it("will set test prop according to config.getConfig('debug') value", () => {
-      let getConfigStub = sinon.stub(config, 'getConfig').returns(true)
-
-      const bid = newAdUnit()
-      const testIsOne = spec.buildRequests(
-        bidRequests,
-        newBidderRequest({
-          bids: [bid]
-        })
-      )
-
-      expect(testIsOne.data.test).to.be.equal(1)
-      getConfigStub.restore()
-
-      const testIsZero = spec.buildRequests(
-        bidRequests,
-        newBidderRequest({
-          bids: [bid]
-        })
-      )
-      getConfigStub = sinon.stub(config, 'getConfig').returns(false)
-      expect(testIsZero.data.test).to.be.equal(0)
-      getConfigStub.restore()
-    })
   })
 
   describe('interpretResponse', () => {

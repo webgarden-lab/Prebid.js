@@ -1,7 +1,6 @@
 import { registerBidder } from 'src/adapters/bidderFactory'
-import { BANNER, VIDEO } from 'src/mediaTypes'
+import { BANNER } from 'src/mediaTypes'
 import * as utils from 'src/utils'
-import { config } from 'src/config'
 
 const getParams = ({ d, g, p, m }) => ({ d, g, p, m })
 
@@ -10,7 +9,7 @@ const LOG_PREFIX = 'r2b2Adapter::'
 export const spec = {
   code: BIDDER_CODE,
   aliases: [],
-  supportedMediaTypes: [BANNER, VIDEO],
+  supportedMediaTypes: [BANNER],
   placements: [],
 
   isBidRequestValid: function(bid) {
@@ -74,9 +73,7 @@ export const spec = {
     const data = {
       id: tid,
       source: { tid },
-      tmax: 1000,
-      imp: imps,
-      test: config.getConfig('debug') ? 1 : 0
+      imp: imps
     }
 
     return {
